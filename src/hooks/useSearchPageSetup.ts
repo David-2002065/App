@@ -64,6 +64,17 @@ function useSearchPageSetup(queryJSON: Readonly<SearchQueryJSON> | undefined) {
     // Hashes this page requested, so an error can be traced to the attempt that produced it.
     const requestedHashesRef = useRef<Set<number>>(new Set());
 
+    const snapshotState = currentSearchResults?.search?.state;
+    const prevSnapshotState = usePrevious(snapshotState);
+    const prevHash = usePrevious(hash);
+    // A request on this query just came back clean, so the network works again.
+    const didRequestSucceed =
+        hash === prevHash &&
+        isSnapshotForCurrentQuery &&
+        prevSnapshotState === CONST.SEARCH.SNAPSHOT_STATE.LOADING &&
+        snapshotState === CONST.SEARCH.SNAPSHOT_STATE.LOADED &&
+        isEmptyObject(currentSearchResults?.errors);
+
     // Clear selected transactions when navigating to a different search query
     function clearOnHashChange() {
         if (hash === undefined) {
@@ -125,6 +136,14 @@ function useSearchPageSetup(queryJSON: Readonly<SearchQueryJSON> | undefined) {
         requestedHashesRef.current.add(hash);
         openSearch(undefined, hash);
     }, [hasErrorToClear, hash]);
+
+    // Failures from before a working request can be retried once more, like a reconnect allows.
+    useEffect(() => {
+        if (!didRequestSucceed || hash === undefined) {
+            return;
+        }
+        requestedHashesRef.current = new Set([hash]);
+    }, [didRequestSucceed, hash]);
 
     useEffect(() => {
         if (!prevIsOffline || isOffline) {

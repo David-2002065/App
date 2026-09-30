@@ -105,6 +105,39 @@ function buildLoadedButPendingSnapshot(hash: number): SearchResults {
     } as unknown as SearchResults;
 }
 
+/** A request for this query that is still in flight. */
+function buildLoadingSnapshot(hash: number): SearchResults {
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion
+    return {
+        search: {
+            type: CONST.SEARCH.DATA_TYPES.EXPENSE,
+            hash,
+            isLoading: true,
+            offset: 0,
+            state: CONST.SEARCH.SNAPSHOT_STATE.LOADING,
+            sortBy: CONST.SEARCH.TABLE_COLUMNS.DATE,
+            sortOrder: CONST.SEARCH.SORT_ORDER.DESC,
+        },
+    } as unknown as SearchResults;
+}
+
+/** The same request after it came back clean. */
+function buildSucceededSnapshot(hash: number): SearchResults {
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion
+    return {
+        search: {
+            type: CONST.SEARCH.DATA_TYPES.EXPENSE,
+            hash,
+            isLoading: false,
+            offset: 0,
+            state: CONST.SEARCH.SNAPSHOT_STATE.LOADED,
+            sortBy: CONST.SEARCH.TABLE_COLUMNS.DATE,
+            sortOrder: CONST.SEARCH.SORT_ORDER.DESC,
+        },
+        data: {},
+    } as unknown as SearchResults;
+}
+
 /** The hashes openSearch() was asked to clear, ignoring the plain calls that only load bank account data. */
 function getClearedHashes() {
     return mockOpenSearch.mock.calls.map((call) => call[1]).filter((hash) => hash !== undefined);
@@ -260,5 +293,41 @@ describe('useSearchPageSetup', () => {
 
         // Then each query got exactly one clear, so switching back and forth cannot re-request forever
         expect(getClearedHashes()).toEqual([queryJSON?.hash, queryJSONB?.hash]);
+    });
+
+    it('lets another errored query retry once after a request succeeds', () => {
+        // Given two queries that both failed while requests were failing, each already cleared once
+        mockSearchResults = buildErroredSnapshot(queryJSON?.hash ?? 0);
+        const {rerender} = renderHook(({queryJSON: currentQueryJSON}) => useSearchPageSetup(currentQueryJSON), {initialProps: {queryJSON}});
+        mockSearchResults = buildErroredSnapshot(queryJSONB?.hash ?? 0);
+        rerender({queryJSON: queryJSONB});
+
+        // When the network recovers and a refresh on B comes back clean
+        mockSearchResults = buildLoadingSnapshot(queryJSONB?.hash ?? 0);
+        rerender({queryJSON: queryJSONB});
+        mockSearchResults = buildSucceededSnapshot(queryJSONB?.hash ?? 0);
+        rerender({queryJSON: queryJSONB});
+
+        // And the user switches back to A, which still holds the old failure
+        mockSearchResults = buildErroredSnapshot(queryJSON?.hash ?? 0);
+        rerender({queryJSON});
+
+        // Then A gets one more clear, since the success proved a retry can work now
+        expect(getClearedHashes()).toEqual([queryJSON?.hash, queryJSONB?.hash, queryJSON?.hash]);
+    });
+
+    it('does not re-arm the retry for a request that failed again', () => {
+        // Given an errored query whose retry is in flight
+        mockSearchResults = buildErroredSnapshot(queryJSON?.hash ?? 0);
+        const {rerender} = renderHook(({queryJSON: currentQueryJSON}) => useSearchPageSetup(currentQueryJSON), {initialProps: {queryJSON}});
+        mockSearchResults = buildLoadingSnapshot(queryJSON?.hash ?? 0);
+        rerender({queryJSON});
+
+        // When that retry fails too, because requests are still failing
+        mockSearchResults = buildErroredSnapshot(queryJSON?.hash ?? 0);
+        rerender({queryJSON});
+
+        // Then the page does not clear it again, so a persistent failure cannot loop
+        expect(getClearedHashes()).toEqual([queryJSON?.hash]);
     });
 });
