@@ -41,7 +41,7 @@ import type * as reactNavigationNativeImport from '@react-navigation/native';
 import type React from 'react';
 
 import {PortalProvider} from '@gorhom/portal';
-import {NavigationContainer} from '@react-navigation/native';
+import {CommonActions, NavigationContainer} from '@react-navigation/native';
 import Onyx from 'react-native-onyx';
 
 import createMock from '../utils/createMock';
@@ -482,6 +482,104 @@ describe('SearchPageNarrow', () => {
         expect(screen.getByText('Refresh needed')).toBeTruthy();
         expect(screen.getByText('Refresh')).toBeTruthy();
         expect(screen.queryByText('Oops... Something went wrong')).toBeNull();
+    });
+
+    // A narrow tab switch only sets the route's params, so the page stays mounted and only Search remounts.
+    const switchTab = async (rerender: (ui: React.ReactElement) => void, query: string) => {
+        await act(async () => {
+            mockSearchQueryParam.mockReturnValue(query);
+            navigationRef.dispatch({...CommonActions.setParams({q: query}), source: navigationRef.getCurrentRoute()?.key});
+        });
+        rerender(getSearchPage(query));
+    };
+
+    // What search() leaves on the snapshot when the request never got a server answer.
+    const failTab = (json: typeof failedQueryJSON) =>
+        act(async () => {
+            await Onyx.merge(`${ONYXKEYS.COLLECTION.SNAPSHOT}${json?.hash}`, {
+                errors: {error: 'Something went wrong'},
+                search: {
+                    type: json?.type,
+                    offset: 0,
+                    hash: json?.hash,
+                    isLoading: false,
+                    hasMoreResults: false,
+                    state: CONST.SEARCH.SNAPSHOT_STATE.LOADED,
+                    responseJsonCode: CONST.JSON_CODE.NO_RESPONSE,
+                },
+            });
+        });
+
+    const firstPageCallsFor = (hash: number | undefined) => mockSearch.mock.calls.filter(([params]) => params?.queryJSON?.hash === hash && params?.offset === 0).length;
+
+    it('requests a tab that failed earlier again once a Refresh on another tab came back clean', async () => {
+        // Given both tabs were requested while requests were failing, so both snapshots carry a NO_RESPONSE error
+        const {rerender} = renderPage();
+        await act(async () => {
+            jest.runAllTimers();
+        });
+        await failTab(failedQueryJSON);
+        await switchTab(rerender, EXPENSE_QUERY);
+        await act(async () => {
+            jest.runAllTimers();
+        });
+        await failTab(expenseQueryJSON);
+        expect(screen.getByText('Refresh needed')).toBeTruthy();
+
+        // When the network is back and Refresh on the expense tab goes from loading to loaded with no errors
+        await act(async () => {
+            await Onyx.merge(`${ONYXKEYS.COLLECTION.SNAPSHOT}${expenseQueryJSON?.hash}`, {
+                errors: null,
+                search: {isLoading: true, state: CONST.SEARCH.SNAPSHOT_STATE.LOADING, responseJsonCode: null},
+            });
+        });
+        await act(async () => {
+            await Onyx.merge(`${ONYXKEYS.COLLECTION.SNAPSHOT}${expenseQueryJSON?.hash}`, getExpenseSnapshot(false));
+        });
+        await act(async () => {
+            jest.runAllTimers();
+        });
+        mockSearch.mockClear();
+        await switchTab(rerender, FAILED_QUERY);
+        await act(async () => {
+            jest.runAllTimers();
+        });
+
+        // Then the other failed tab is requested on its own instead of staying on the refresh view until tapped
+        expect(firstPageCallsFor(failedQueryJSON?.hash)).toBeGreaterThanOrEqual(1);
+    });
+
+    it('does not re-request a failed tab on every tab switch while requests keep failing', async () => {
+        // Given both tabs were requested while requests were failing, and both failed
+        const {rerender} = renderPage();
+        await act(async () => {
+            jest.runAllTimers();
+        });
+        await failTab(failedQueryJSON);
+        await switchTab(rerender, EXPENSE_QUERY);
+        await act(async () => {
+            jest.runAllTimers();
+        });
+        await failTab(expenseQueryJSON);
+        mockSearch.mockClear();
+
+        // When the user flips between the two failed tabs while nothing has succeeded yet
+        for (let round = 0; round < 3; round++) {
+            await switchTab(rerender, FAILED_QUERY);
+            await act(async () => {
+                jest.runAllTimers();
+            });
+            await failTab(failedQueryJSON);
+            await switchTab(rerender, EXPENSE_QUERY);
+            await act(async () => {
+                jest.runAllTimers();
+            });
+            await failTab(expenseQueryJSON);
+        }
+
+        // Then neither query is sent again, the error view settles instead of retrying on every visit
+        expect(firstPageCallsFor(failedQueryJSON?.hash)).toBe(0);
+        expect(firstPageCallsFor(expenseQueryJSON?.hash)).toBe(0);
     });
 
     it('renders the empty state when a response without data reached the terminal loaded state', async () => {
