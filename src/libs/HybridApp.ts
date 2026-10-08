@@ -8,7 +8,7 @@ import type {OnyxEntry} from 'react-native-onyx';
 import HybridAppModule from '@expensify/react-native-hybrid-app';
 import Onyx from 'react-native-onyx';
 
-import {closeReactNativeApp, setReadyToShowAuthScreens, setUseNewDotSignInPage} from './actions/HybridApp';
+import {closeReactNativeApp, setReadyToShowAuthScreens, setShouldReturnToOldDotAfter2FA, setUseNewDotSignInPage} from './actions/HybridApp';
 import Log from './Log';
 import {getCurrentUserEmail} from './Network/NetworkStore';
 import {shouldUseOldApp} from './TryNewDotUtils';
@@ -117,7 +117,11 @@ function signInToOldDotAndChooseExperience(
 
     if (tryNewDot !== undefined) {
         setUseNewDotSignInPage(false).then(() => {
-            if (shouldUseOldApp(tryNewDot) && (!account?.needsTwoFactorAuthSetup || account?.requiresTwoFactorAuth)) {
+            const shouldReturnToOldDot = !!shouldUseOldApp(tryNewDot);
+            const isWaitingForRequired2FA = !!account?.needsTwoFactorAuthSetup && !account?.requiresTwoFactorAuth;
+            // This decision runs once per sign-in, so keep it for the 2FA success screen to finish the handoff
+            setShouldReturnToOldDotAfter2FA(shouldReturnToOldDot && isWaitingForRequired2FA);
+            if (shouldReturnToOldDot && !isWaitingForRequired2FA) {
                 closeReactNativeApp({shouldSetNVP: false, isTrackingGPS: false});
             } else {
                 setReadyToShowAuthScreens(true);

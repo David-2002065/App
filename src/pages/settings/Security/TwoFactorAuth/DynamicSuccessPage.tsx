@@ -13,7 +13,7 @@ import type {TwoFactorAuthNavigatorParamList} from '@libs/Navigation/types';
 import {shouldHideOldAppRedirect} from '@libs/TryNewDotUtils';
 
 import {openReimbursementAccountPage} from '@userActions/BankAccounts';
-import {closeReactNativeApp} from '@userActions/HybridApp';
+import {closeReactNativeApp, setShouldReturnToOldDotAfter2FA} from '@userActions/HybridApp';
 import {openLink} from '@userActions/Link';
 import {clearTwoFactorAuthData, quitAndNavigateBack} from '@userActions/TwoFactorAuthActions';
 import {buildOnboardingFlowParams, resumeOnboardingAfterRequired2FASetup} from '@userActions/Welcome/OnboardingFlow';
@@ -44,6 +44,8 @@ function DynamicSuccessPage({route}: DynamicSuccessPageProps) {
     const isSecuritySettingsFlow = focusedRoute?.name === SCREENS.SETTINGS.SECURITY;
 
     const [tryNewDot, tryNewDotMetadata] = useOnyx(ONYXKEYS.NVP_TRY_NEW_DOT);
+    const [hybridApp] = useOnyx(ONYXKEYS.HYBRID_APP);
+    const shouldReturnToOldDotAfter2FA = !!hybridApp?.shouldReturnToOldDotAfter2FA;
     const [account] = useOnyx(ONYXKEYS.ACCOUNT);
     const [onboardingValues] = useOnyx(ONYXKEYS.NVP_ONBOARDING);
     const hasCompletedGuidedSetupFlow = hasCompletedGuidedSetupFlowSelector(onboardingValues);
@@ -94,7 +96,9 @@ function DynamicSuccessPage({route}: DynamicSuccessPageProps) {
     };
 
     const onButtonPress = () => {
-        if (CONFIG.IS_HYBRID_APP && isClassicRedirectDismissed && !isClassicRedirectBlocked) {
+        // Finish the handoff sign-in deferred for the required 2FA setup, using the decision it already made
+        if (CONFIG.IS_HYBRID_APP && (shouldReturnToOldDotAfter2FA || (isClassicRedirectDismissed && !isClassicRedirectBlocked))) {
+            setShouldReturnToOldDotAfter2FA(false);
             closeReactNativeApp({shouldSetNVP: false, isTrackingGPS: false});
             return;
         }

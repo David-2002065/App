@@ -1520,8 +1520,17 @@ function validateTwoFactorAuth(twoFactorAuthCode: string, shouldClearData: boole
 
         // Clear onyx data if the user has just signed in and is forced to add 2FA
         if (shouldClearData) {
-            const keysToPreserveWithPrivatePersonalDetails = [...KEYS_TO_PRESERVE, ONYXKEYS.PRIVATE_PERSONAL_DETAILS];
-            clearOnyxAndSeedFullReconnect(keysToPreserveWithPrivatePersonalDetails).then(() => updateAuthTokenAndOpenApp(response.authToken, response.encryptedAuthToken));
+            // The 2FA RHP stays mounted through this reset, so write the account state the server just confirmed
+            // and keep this account's loaded identity, otherwise the guarded screens unmount until OpenApp lands
+            const keysToPreserveForLoginRequired2FA = [...KEYS_TO_PRESERVE, ONYXKEYS.PRIVATE_PERSONAL_DETAILS, ONYXKEYS.HAS_LOADED_APP, ONYXKEYS.PERSONAL_DETAILS_LIST];
+            Onyx.merge(ONYXKEYS.ACCOUNT, {
+                requiresTwoFactorAuth: true,
+                needsTwoFactorAuthSetup: false,
+                twoFactorAuthSecretKey: null,
+                isLoading: false,
+            })
+                .then(() => clearOnyxAndSeedFullReconnect(keysToPreserveForLoginRequired2FA))
+                .then(() => updateAuthTokenAndOpenApp(response.authToken, response.encryptedAuthToken));
             return;
         }
 

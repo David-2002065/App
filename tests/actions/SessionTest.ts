@@ -861,6 +861,45 @@ describe('Session', () => {
             clearSpy.mockRestore();
             writeWithNoDuplicatesSpy.mockRestore();
         });
+        test('login-required path writes the confirmed 2FA account state and keeps the loaded identity through the reset', async () => {
+            // Given a user who signed in and is forced to set up 2FA, with the 2FA RHP still mounted
+            const makeRequestSpy = jest.spyOn(API, 'makeRequestWithSideEffects').mockResolvedValue({
+                authToken: 'newAuthToken',
+                encryptedAuthToken: 'newEncryptedAuthToken',
+            });
+            const mergeSpy = jest.spyOn(Onyx, 'merge');
+            const multiSetSpy = jest.spyOn(Onyx, 'multiSet').mockResolvedValue(undefined);
+            const clearSpy = jest.spyOn(Onyx, 'clear').mockResolvedValue(undefined);
+            const writeWithNoDuplicatesSpy = jest.spyOn(API, 'writeWithNoDuplicatesConflictAction').mockResolvedValue(undefined);
+
+            // When the 2FA validation succeeds and the stale pre-2FA data is cleared
+            SessionUtil.validateTwoFactorAuth('123456', true);
+            await waitForBatchedUpdates();
+
+            // Then the account carries the state the server already confirmed, so the verify step can advance without waiting for OpenApp
+            expect(mergeSpy).toHaveBeenCalledWith(ONYXKEYS.ACCOUNT, {
+                requiresTwoFactorAuth: true,
+                needsTwoFactorAuthSetup: false,
+                twoFactorAuthSecretKey: null,
+                isLoading: false,
+            });
+            const accountMergeOrder = mergeSpy.mock.calls.findIndex(
+                ([key, value]) => key === ONYXKEYS.ACCOUNT && isRecord(value) && 'requiresTwoFactorAuth' in value && value.requiresTwoFactorAuth === true,
+            );
+            expect(mergeSpy.mock.invocationCallOrder.at(accountMergeOrder)).toBeLessThan(clearSpy.mock.invocationCallOrder.at(0) ?? Number.MAX_SAFE_INTEGER);
+
+            // Then the reset keeps HAS_LOADED_APP and the personal details, so withAgentAccessDenied does not unmount the 2FA screens
+            expect(clearSpy).toHaveBeenCalled();
+            expect(clearSpy.mock.calls.at(0)?.at(0)).toEqual(
+                expect.arrayContaining([ONYXKEYS.ACCOUNT, ONYXKEYS.SESSION, ONYXKEYS.PRIVATE_PERSONAL_DETAILS, ONYXKEYS.HAS_LOADED_APP, ONYXKEYS.PERSONAL_DETAILS_LIST]),
+            );
+
+            makeRequestSpy.mockRestore();
+            mergeSpy.mockRestore();
+            multiSetSpy.mockRestore();
+            clearSpy.mockRestore();
+            writeWithNoDuplicatesSpy.mockRestore();
+        });
     });
 
     describe('clearTwoFactorAuthSecretKey', () => {

@@ -143,6 +143,17 @@ function setUseNewDotSignInPage(useNewDotSignInPage: boolean) {
 }
 
 /*
+ * Remembers whether sign-in kept a Classic user in NewDot only for the required 2FA setup.
+ */
+function setShouldReturnToOldDotAfter2FA(shouldReturnToOldDotAfter2FA: boolean) {
+    // This value is only relevant for HybridApp, so we can skip it in other environments.
+    if (!CONFIG.IS_HYBRID_APP) {
+        return Promise.resolve();
+    }
+    return Onyx.merge(ONYXKEYS.HYBRID_APP, {shouldReturnToOldDotAfter2FA});
+}
+
+/*
  * Starts HybridApp sign-in flow from the beginning.
  */
 function resetSignInFlow() {
@@ -154,7 +165,8 @@ function resetSignInFlow() {
     return Onyx.merge(ONYXKEYS.HYBRID_APP, {
         readyToShowAuthScreens: false,
         useNewDotSignInPage: true,
+        shouldReturnToOldDotAfter2FA: false,
     });
 }
 
-export {getHybridAppSettings, setReadyToShowAuthScreens, resetSignInFlow, setUseNewDotSignInPage, closeReactNativeApp};
+export {getHybridAppSettings, setReadyToShowAuthScreens, resetSignInFlow, setUseNewDotSignInPage, setShouldReturnToOldDotAfter2FA, closeReactNativeApp};

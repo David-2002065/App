@@ -58,6 +58,9 @@ type HybridApp = {
 
     /** Indicates if user pressed the "Try New Expensify" button */
     pressedTryNewExpensify?: boolean;
+
+    /** Indicates that sign-in kept a Classic user in NewDot only to finish the required 2FA setup */
+    shouldReturnToOldDotAfter2FA?: boolean;
 };
 
 export default HybridApp;
