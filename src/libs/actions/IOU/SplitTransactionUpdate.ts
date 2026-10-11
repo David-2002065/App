@@ -115,6 +115,8 @@ type UpdateSplitTransactionsParams = {
     getCurrencySymbol: CurrencyListActionsContextType['getCurrencySymbol'];
     rules: OnyxCollection<OnyxTypes.Rule>;
     isVendorMatchingBetaEnabled: boolean | undefined;
+    /** Splits the split editor shows as locked for the current user */
+    frozenSplitTransactionIDs?: Set<string>;
 };
 
 /**
@@ -175,8 +177,13 @@ function hasEditableSplitExpenseLeft(
     allTransactionsList: OnyxCollection<OnyxTypes.Transaction>,
     allReportsList: OnyxCollection<OnyxTypes.Report>,
     searchReportsData: SearchResultDataType | undefined,
+    frozenSplitTransactionIDs?: Set<string>,
 ): boolean {
     return splitExpenses.some((expense) => {
+        // A split the editor locked for this user (e.g. rejected back to the submitter) can't take the original back.
+        if (frozenSplitTransactionIDs?.has(expense.transactionID)) {
+            return false;
+        }
         const transactionKey = `${ONYXKEYS.COLLECTION.TRANSACTION}${expense.transactionID}` as const;
         const liveReportID = allTransactionsList?.[transactionKey]?.reportID ?? searchReportsData?.[transactionKey]?.reportID ?? expense.reportID;
         const reportKey = `${ONYXKEYS.COLLECTION.REPORT}${liveReportID}` as const;
@@ -218,6 +225,7 @@ function updateSplitTransactions({
     getCurrencySymbol,
     rules,
     isVendorMatchingBetaEnabled,
+    frozenSplitTransactionIDs,
 }: UpdateSplitTransactionsParams) {
     const parentTransactionReport = getReportOrDraftReport(transactionReport?.parentReportID);
     // For selfDM-origin splits the caller can't resolve a real `expenseReport` (the draft/source
@@ -305,7 +313,7 @@ function updateSplitTransactions({
 
     const isCreationOfSplits = allChildTransactions.length === 0;
     const currentSnapshotDataForSplits = allSnapshots?.[`${ONYXKEYS.COLLECTION.SNAPSHOT}${searchContext?.currentSearchHash}`]?.data;
-    const hasEditableSplitExpensesLeft = hasEditableSplitExpenseLeft(splitExpenses, allTransactionsList, allReportsList, currentSnapshotDataForSplits);
+    const hasEditableSplitExpensesLeft = hasEditableSplitExpenseLeft(splitExpenses, allTransactionsList, allReportsList, currentSnapshotDataForSplits, frozenSplitTransactionIDs);
     const isReverseSplitOperation = splitExpenses.length === 1 && allChildTransactions.length > 0 && hasEditableSplitExpensesLeft;
 
     let splitThreadComments: OnyxTypes.ReportAction[] = [];

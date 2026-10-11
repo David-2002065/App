@@ -429,6 +429,7 @@ function DynamicSplitExpensePage({route}: DynamicSplitExpensePageProps) {
             isTrackIntentUser,
             formatPhoneNumber,
             rules,
+            frozenSplitTransactionIDs,
         });
     };
 
