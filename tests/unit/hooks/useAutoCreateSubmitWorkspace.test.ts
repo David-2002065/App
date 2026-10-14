@@ -173,17 +173,16 @@ describe('useAutoCreateSubmitWorkspace', () => {
         expect(setOnboardingPolicyIDSpy).toHaveBeenCalledTimes(1);
     });
 
-    it('navigates to the submit workspace page after completing onboarding', async () => {
+    it('navigates Home after completing onboarding', async () => {
         // Given a user completing the EMPLOYER onboarding flow
 
         // When autoCreateSubmitWorkspace finishes setting up the workspace
         const {result} = renderHook(() => useAutoCreateSubmitWorkspace());
         await result.current('John', 'Doe');
 
-        // Then the user should be navigated to the newly created Submit workspace
-        // so they land on their workspace immediately after onboarding
+        // Then the user lands on Home, where Getting started covers the Submit workspace steps
         expect(navigateSpy).toHaveBeenCalledTimes(1);
-        expect(navigateSpy).toHaveBeenCalledWith(MOCK_POLICY_ID, expect.any(Boolean));
+        expect(navigateSpy).toHaveBeenCalledWith();
     });
 
     it('reuses the existing onboarding workspace instead of creating a new one', async () => {
@@ -274,7 +273,7 @@ describe('useAutoCreateSubmitWorkspace', () => {
         expect(navigateSpy).toHaveBeenCalledTimes(1);
     });
 
-    it('navigates to the existing Submit workspace when an already-onboarded caller skips creation', async () => {
+    it('navigates Home without creating a workspace when an already-onboarded caller skips creation', async () => {
         // Given an already-onboarded user (the Submit plan welcome modal passes shouldCompleteOnboarding = false)
         // who is an editor/admin of an existing Submit workspace, so no new workspace should be created
         const existingSubmitPolicy = createMock<PolicyType>({
@@ -290,15 +289,14 @@ describe('useAutoCreateSubmitWorkspace', () => {
         const {result} = renderHook(() => useAutoCreateSubmitWorkspace());
         await result.current('John', 'Doe', false);
 
-        // Then no duplicate workspace is created, onboarding is not re-run, and the user is
-        // navigated to the existing Submit workspace instead of falling back to Home
+        // Then no duplicate workspace is created, onboarding is not re-run, and the user lands on Home
         expect(createWorkspaceSpy).not.toHaveBeenCalled();
         expect(completeOnboardingSpy).not.toHaveBeenCalled();
         expect(navigateSpy).toHaveBeenCalledTimes(1);
-        expect(navigateSpy).toHaveBeenCalledWith(existingSubmitPolicy.id, expect.any(Boolean));
+        expect(navigateSpy).toHaveBeenCalledWith();
     });
 
-    it('keeps the Home fallback for onboarding callers when creation is skipped', async () => {
+    it('navigates Home for onboarding callers when creation is skipped', async () => {
         // Given an onboarding user who already has an editable group workspace, so creation is skipped
         const existingSubmitPolicy = createMock<PolicyType>({
             id: 'existing-submit-policy-id',
@@ -313,11 +311,10 @@ describe('useAutoCreateSubmitWorkspace', () => {
         const {result} = renderHook(() => useAutoCreateSubmitWorkspace());
         await result.current('Jane', 'Smith');
 
-        // Then the navigation still receives no policy ID, preserving the pre-existing onboarding
-        // behavior (landing on Home) so this fix stays scoped to already-onboarded callers
+        // Then the user still lands on Home
         expect(createWorkspaceSpy).not.toHaveBeenCalled();
         expect(navigateSpy).toHaveBeenCalledTimes(1);
-        expect(navigateSpy).toHaveBeenCalledWith(undefined, expect.any(Boolean));
+        expect(navigateSpy).toHaveBeenCalledWith();
     });
 
     it('uses the localCurrencyCode from personal details for workspace currency', () => {

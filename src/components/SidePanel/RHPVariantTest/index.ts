@@ -33,8 +33,7 @@ Onyx.connectWithoutView({
 
 /**
  * Determines if the user should be navigated to the RHP variant side panel after onboarding.
- * The existing micro-company RHP variants (rhpConciergeDm, rhpAdminsRoom) are only shown to micro companies.
- * The trackExpensesWithConcierge variant is controlled entirely by the backend and applies regardless of company size.
+ * The micro-company RHP variants (rhpConciergeDm, rhpAdminsRoom, rhpHomePage) are only shown to micro companies.
  *
  * Accepts an optional variantOverride to bypass the module-level Onyx variable, avoiding a race
  * condition where the Onyx callback hasn't fired yet when this is called immediately after the
@@ -42,10 +41,6 @@ Onyx.connectWithoutView({
  */
 const shouldOpenRHPVariant: ShouldOpenRHPVariant = (variantOverride) => {
     const variant = variantOverride ?? onboardingRHPVariant;
-
-    if (variant === CONST.ONBOARDING_RHP_VARIANT.TRACK_EXPENSES_WITH_CONCIERGE) {
-        return true;
-    }
 
     const isMicroCompany =
         onboardingCompanySize === CONST.ONBOARDING_COMPANY_SIZE.MICRO_SMALL ||
@@ -67,15 +62,6 @@ const shouldOpenRHPVariant: ShouldOpenRHPVariant = (variantOverride) => {
  */
 const handleRHPVariantNavigation: HandleRHPVariantNavigation = (onboardingPolicyID, variantOverride, navigationOptions) => {
     const variant = variantOverride ?? onboardingRHPVariant;
-    if (variant === CONST.ONBOARDING_RHP_VARIANT.TRACK_EXPENSES_WITH_CONCIERGE) {
-        const shouldPreserveRevealedReport = isReportTopmostSplitNavigator();
-        if (!shouldPreserveRevealedReport) {
-            Navigation.navigate(ROUTES.HOME, navigationOptions);
-        }
-        SidePanelActions.openSidePanel(true);
-        return;
-    }
-
     const isRHPHomePage = variant === CONST.ONBOARDING_RHP_VARIANT.RHP_HOME_PAGE;
 
     if (isRHPHomePage) {

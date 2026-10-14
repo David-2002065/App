@@ -148,6 +148,7 @@ function useCompleteOnboarding() {
                 (currentUserPersonalDetails.email ?? '').includes('+'),
                 {
                     variantOverride: rhpVariant,
+                    isManageTeamIntent: onboardingPurposeSelected === CONST.ONBOARDING_CHOICES.MANAGE_TEAM,
                 },
             );
         } catch (error) {

@@ -10,14 +10,11 @@ import type {OnyxCollection, OnyxEntry} from 'react-native-onyx';
 import Onyx from 'react-native-onyx';
 
 import {setDisableDismissOnEscape} from './actions/Modal';
-import SidePanelActions from './actions/SidePanel';
-import {setOnboardingRHPVariant} from './actions/Welcome';
 import isReportTopmostSplitNavigator from './Navigation/helpers/isReportTopmostSplitNavigator';
 import dismissOnboardingModalBeforeExit from './Navigation/helpers/OnboardingNavigationUtils';
 import shouldOpenOnAdminRoom from './Navigation/helpers/shouldOpenOnAdminRoom';
 import Navigation from './Navigation/Navigation';
 import {findLastAccessedReport} from './ReportUtils';
-import {buildCannedSearchQuery} from './SearchQueryUtils';
 
 let onboardingRHPVariant: OnyxEntry<OnboardingRHPVariant>;
 Onyx.connectWithoutView({
@@ -30,6 +27,8 @@ Onyx.connectWithoutView({
 type NavigateAfterOnboardingOptions = {
     afterTransition?: () => void;
     variantOverride?: OnboardingRHPVariant | null;
+    // Only the Manage my team experiment may open the side panel
+    isManageTeamIntent?: boolean;
 };
 
 /**
@@ -86,29 +85,19 @@ function navigateAfterOnboarding(
 ) {
     setDisableDismissOnEscape(false);
 
-    // On mobile (small screen), Track workspace admins with the trackExpensesWithConcierge variant
-    // should navigate directly to the Concierge DM (which contains onboarding tasks).
-    // This check is outside shouldOpenRHPVariant because that function returns false on native
-    // (Side Panel doesn't exist on native), but we still need to navigate to Concierge on mobile.
     const navigationOptions = options?.afterTransition ? {afterTransition: options.afterTransition} : undefined;
     const variantOverride = options?.variantOverride;
     const variant = variantOverride ?? onboardingRHPVariant;
 
-    // The homePageNoRHP arm of the onboarding experiment lands on Home without opening the side panel, at every company size,
-    // so it is handled before the variants that are limited to micro companies or that open the side panel.
-    if (variant === CONST.ONBOARDING_RHP_VARIANT.HOME_PAGE_NO_RHP) {
+    // Track users and the homePageNoRHP arm land on Home without the side panel, since Home's Getting started already onboards them
+    if (variant === CONST.ONBOARDING_RHP_VARIANT.HOME_PAGE_NO_RHP || variant === CONST.ONBOARDING_RHP_VARIANT.TRACK_EXPENSES_WITH_CONCIERGE) {
         if (!isReportTopmostSplitNavigator()) {
             Navigation.navigate(ROUTES.HOME, navigationOptions);
         }
         return;
     }
 
-    if (isSmallScreenWidth && variant === CONST.ONBOARDING_RHP_VARIANT.TRACK_EXPENSES_WITH_CONCIERGE) {
-        Navigation.navigate(ROUTES.REPORT_WITH_ID.getRoute(conciergeReportID), navigationOptions);
-        return;
-    }
-
-    if (shouldOpenRHPVariant(variantOverride)) {
+    if (options?.isManageTeamIntent && shouldOpenRHPVariant(variantOverride)) {
         handleRHPVariantNavigation(onboardingPolicyID, variantOverride, navigationOptions);
         return;
     }
@@ -157,26 +146,17 @@ function navigateAfterOnboardingWithMicrotaskQueue(
 }
 
 /**
- * After creating or joining a Submit workspace during onboarding, navigate to Spend > Expenses
- * with the side panel open so the #admins room is visible in Concierge Anywhere.
+ * After creating or joining a Submit workspace, land on Home where Getting started covers the Submit steps.
  */
-function navigateToSubmitWorkspaceAfterOnboarding(policyID?: string, shouldUseNarrowLayout = false) {
+function navigateToSubmitWorkspaceAfterOnboarding() {
     setDisableDismissOnEscape(false);
-
-    if (!policyID) {
-        Navigation.navigate(ROUTES.HOME);
-        return;
-    }
-
-    setOnboardingRHPVariant(CONST.ONBOARDING_RHP_VARIANT.RHP_ADMINS_ROOM);
-    Navigation.navigate(ROUTES.SEARCH_ROOT.getRoute({query: buildCannedSearchQuery({type: CONST.SEARCH.DATA_TYPES.EXPENSE}), searchKey: CONST.SEARCH.SEARCH_KEYS.EXPENSES}));
-    SidePanelActions.openSidePanel(!shouldUseNarrowLayout);
+    Navigation.navigate(ROUTES.HOME);
 }
 
-function navigateToSubmitWorkspaceAfterOnboardingWithMicrotaskQueue(policyID?: string, shouldUseNarrowLayout = false) {
+function navigateToSubmitWorkspaceAfterOnboardingWithMicrotaskQueue() {
     dismissOnboardingModalBeforeExit(() => {
         Navigation.setNavigationActionToMicrotaskQueue(() => {
-            navigateToSubmitWorkspaceAfterOnboarding(policyID, shouldUseNarrowLayout);
+            navigateToSubmitWorkspaceAfterOnboarding();
         });
     });
 }
