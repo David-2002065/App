@@ -12,6 +12,8 @@ import ROUTES from '@src/ROUTES';
 
 import Onyx from 'react-native-onyx';
 
+import type * as RHPVariantTest from '../../src/components/SidePanel/RHPVariantTest/index';
+
 import getOnyxValue from '../utils/getOnyxValue';
 import waitForBatchedUpdates from '../utils/waitForBatchedUpdates';
 
@@ -78,6 +80,9 @@ jest.mock('@libs/Navigation/helpers/OnboardingNavigationUtils', () => ({
     __esModule: true,
     default: jest.fn(),
 }));
+
+// Jest resolves the native no-op by default, but the side panel only exists on web
+jest.mock('@components/SidePanel/RHPVariantTest', () => jest.requireActual<typeof RHPVariantTest>('../../src/components/SidePanel/RHPVariantTest/index.ts'));
 
 jest.mock('@libs/Navigation/helpers/isReportTopmostSplitNavigator', () => ({
     __esModule: true,
@@ -274,5 +279,51 @@ describe('navigateAfterOnboarding', () => {
         // Then the stored variant still applies and the user lands on Home rather than the admin room
         expect(navigate).toHaveBeenCalledWith(ROUTES.HOME, undefined);
         expect(navigate).not.toHaveBeenCalledWith(ROUTES.REPORT_WITH_ID.getRoute(ONBOARDING_ADMINS_CHAT_REPORT_ID), undefined);
+    });
+    it.each([false, true])('should land Track users on Home without the side panel or the Concierge DM when isSmallScreenWidth is %s', async (isSmallScreenWidth) => {
+        // Given a Track user, whose intent is already covered by Home's Getting started
+        const navigate = jest.spyOn(Navigation, 'navigate');
+        const openSidePanel = jest.spyOn(SidePanelActions, 'openSidePanel');
+
+        // When onboarding finishes with the trackExpensesWithConcierge variant
+        navigateAfterOnboarding(isSmallScreenWidth, true, REPORT_ID, {}, ONBOARDING_POLICY_ID, undefined, false, {
+            variantOverride: CONST.ONBOARDING_RHP_VARIANT.TRACK_EXPENSES_WITH_CONCIERGE,
+        });
+        await waitForBatchedUpdates();
+
+        // Then they land on Home only, so they aren't onboarded in two places at once
+        expect(navigate).toHaveBeenCalledWith(ROUTES.HOME, undefined);
+        expect(navigate).not.toHaveBeenCalledWith(ROUTES.REPORT_WITH_ID.getRoute(REPORT_ID), undefined);
+        expect(openSidePanel).not.toHaveBeenCalled();
+    });
+
+    it('should not open the side panel for a non-manage-team intent that inherits a micro company size and an RHP arm', async () => {
+        // Given the user picked 1-10 on the Manage my team employees step, went back, and the account carries the rhpHomePage arm
+        const openSidePanel = jest.spyOn(SidePanelActions, 'openSidePanel');
+        await Onyx.set(ONYXKEYS.ONBOARDING_COMPANY_SIZE, CONST.ONBOARDING_COMPANY_SIZE.MICRO_SMALL);
+        await Onyx.set(ONYXKEYS.NVP_ONBOARDING_RHP_VARIANT, CONST.ONBOARDING_RHP_VARIANT.RHP_HOME_PAGE);
+
+        // When they finish onboarding with another intent, whose callers don't pass a variant override
+        navigateAfterOnboarding(false, true, '', {}, undefined, undefined);
+        await waitForBatchedUpdates();
+
+        // Then the side panel stays closed, because only Manage my team is part of the RHP experiment
+        expect(openSidePanel).not.toHaveBeenCalled();
+    });
+
+    it('should still open the side panel for the Manage my team intent on the rhpHomePage arm', async () => {
+        // Given a micro company on the Manage my team flow with the rhpHomePage arm
+        const openSidePanel = jest.spyOn(SidePanelActions, 'openSidePanel');
+        await Onyx.set(ONYXKEYS.ONBOARDING_COMPANY_SIZE, CONST.ONBOARDING_COMPANY_SIZE.MICRO_SMALL);
+
+        // When the Manage my team flow finishes onboarding
+        navigateAfterOnboarding(false, true, '', {}, ONBOARDING_POLICY_ID, ONBOARDING_ADMINS_CHAT_REPORT_ID, false, {
+            variantOverride: CONST.ONBOARDING_RHP_VARIANT.RHP_HOME_PAGE,
+            isManageTeamIntent: true,
+        });
+        await waitForBatchedUpdates();
+
+        // Then the running experiment is unchanged and the side panel opens
+        expect(openSidePanel).toHaveBeenCalledWith(true);
     });
 });
