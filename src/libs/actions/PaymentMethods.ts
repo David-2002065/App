@@ -311,7 +311,7 @@ function setPaymentMethodCurrency(currency: ValueOf<typeof CONST.PAYMENT_CARD_CU
  * Call the API to transfer wallet balance.
  *
  */
-function transferWalletBalance(paymentMethod: PaymentMethod) {
+function transferWalletBalance(paymentMethod: PaymentMethod, currentBalance: number | undefined) {
     const paymentMethodIDKey =
         paymentMethod.accountType === CONST.PAYMENT_METHODS.PERSONAL_BANK_ACCOUNT ? CONST.PAYMENT_METHOD_ID_KEYS.BANK_ACCOUNT : CONST.PAYMENT_METHOD_ID_KEYS.DEBIT_CARD;
 
@@ -319,7 +319,7 @@ function transferWalletBalance(paymentMethod: PaymentMethod) {
         [paymentMethodIDKey]: paymentMethod.methodID,
     };
 
-    const optimisticData: Array<OnyxUpdate<typeof ONYXKEYS.WALLET_TRANSFER>> = [
+    const optimisticData: Array<OnyxUpdate<typeof ONYXKEYS.WALLET_TRANSFER | typeof ONYXKEYS.USER_WALLET>> = [
         {
             onyxMethod: 'merge',
             key: ONYXKEYS.WALLET_TRANSFER,
@@ -328,9 +328,15 @@ function transferWalletBalance(paymentMethod: PaymentMethod) {
                 errors: null,
             },
         },
+        {
+            onyxMethod: 'merge',
+            key: ONYXKEYS.USER_WALLET,
+            value: {currentBalance: 0},
+        },
     ];
 
-    const successData: Array<OnyxUpdate<typeof ONYXKEYS.WALLET_TRANSFER>> = [
+    // The whole balance is transferred, so keep it at 0 even if the response returns the pre-transfer wallet
+    const successData: Array<OnyxUpdate<typeof ONYXKEYS.WALLET_TRANSFER | typeof ONYXKEYS.USER_WALLET>> = [
         {
             onyxMethod: 'merge',
             key: ONYXKEYS.WALLET_TRANSFER,
@@ -340,9 +346,14 @@ function transferWalletBalance(paymentMethod: PaymentMethod) {
                 paymentMethodType: paymentMethod.accountType,
             },
         },
+        {
+            onyxMethod: 'merge',
+            key: ONYXKEYS.USER_WALLET,
+            value: {currentBalance: 0},
+        },
     ];
 
-    const failureData: Array<OnyxUpdate<typeof ONYXKEYS.WALLET_TRANSFER>> = [
+    const failureData: Array<OnyxUpdate<typeof ONYXKEYS.WALLET_TRANSFER | typeof ONYXKEYS.USER_WALLET>> = [
         {
             onyxMethod: 'merge',
             key: ONYXKEYS.WALLET_TRANSFER,
@@ -350,6 +361,11 @@ function transferWalletBalance(paymentMethod: PaymentMethod) {
                 loading: false,
                 shouldShowSuccess: false,
             },
+        },
+        {
+            onyxMethod: 'merge',
+            key: ONYXKEYS.USER_WALLET,
+            value: {currentBalance},
         },
     ];
 
