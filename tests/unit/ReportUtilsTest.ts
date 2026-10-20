@@ -4412,6 +4412,41 @@ describe('ReportUtils', () => {
                 expect(requiresAttentionFromCurrentUser(policyExpenseChat, currentUserEmail, currentUserAccountID)).toBe(true);
             });
 
+            it('does not require attention after submit when the employee also has an open report with an unsubmitted expense', async () => {
+                // Given a submitted all-held report plus the employee's next open report, which the chat's iouReportID points at on the approver
+                const seeded = await seedSubmittedHeldChild(otherUserAccountID);
+                const openReportID = '7297';
+                const policyExpenseChat = {...seeded, iouReportID: openReportID, ownerAccountID: otherUserAccountID, isOwnPolicyExpenseChat: false};
+                await Onyx.set(`${ONYXKEYS.COLLECTION.REPORT}${policyExpenseChat.reportID}`, policyExpenseChat);
+                await Onyx.set(`${ONYXKEYS.COLLECTION.REPORT}${openReportID}`, {
+                    ...LHNTestUtils.getFakeReport(),
+                    reportID: openReportID,
+                    policyID: '1',
+                    ownerAccountID: otherUserAccountID,
+                    managerID: currentUserAccountID,
+                    type: CONST.REPORT.TYPE.EXPENSE,
+                    stateNum: CONST.REPORT.STATE_NUM.OPEN,
+                    statusNum: CONST.REPORT.STATUS_NUM.OPEN,
+                });
+                await Onyx.set(`${ONYXKEYS.COLLECTION.TRANSACTION}7296`, {...createRandomTransaction(7296), transactionID: '7296', reportID: openReportID, comment: {}});
+                const openPreview: ReportAction = {
+                    reportActionID: 'preview_7297',
+                    actionName: CONST.REPORT.ACTIONS.TYPE.REPORT_PREVIEW,
+                    created: '2024-01-03 00:00:00.000',
+                    actorAccountID: otherUserAccountID,
+                    childReportID: openReportID,
+                    childStatusNum: CONST.REPORT.STATUS_NUM.OPEN,
+                    shouldShow: true,
+                    message: [{type: 'COMMENT', html: 'Expense report', text: 'Expense report'}],
+                    originalMessage: {linkedReportID: openReportID},
+                };
+                await Onyx.merge(`${ONYXKEYS.COLLECTION.REPORT_ACTIONS}${policyExpenseChat.reportID}`, {[openPreview.reportActionID]: openPreview});
+                await waitForBatchedUpdates();
+
+                // When the approver's attention is derived, then the open report the approver can't act on doesn't keep the dot
+                expect(requiresAttentionFromCurrentUser(policyExpenseChat, currentUserEmail, currentUserAccountID)).toBe(false);
+            });
+
             it('does not require attention after submit when the only other child report is already paid', async () => {
                 // Given a submitted all-held report plus an older loaded sibling report that is already reimbursed
                 const policyExpenseChat = await seedSubmittedHeldChild(otherUserAccountID);
