@@ -6,9 +6,12 @@ import useKeyboardState from '@hooks/useKeyboardState';
 import useOnyx from '@hooks/useOnyx';
 import usePopoverPosition from '@hooks/usePopoverPosition';
 import useResponsiveLayout from '@hooks/useResponsiveLayout';
+import useSafeAreaPaddings from '@hooks/useSafeAreaPaddings';
 import useStyleUtils from '@hooks/useStyleUtils';
 import useThemeStyles from '@hooks/useThemeStyles';
 import useWindowDimensions from '@hooks/useWindowDimensions';
+
+import isTablet from '@libs/isTablet';
 
 import CONST from '@src/CONST';
 import ONYXKEYS from '@src/ONYXKEYS';
@@ -22,6 +25,8 @@ import {useIsFocused} from '@react-navigation/core';
 import {willAlertModalBecomeVisibleSelector} from '@selectors/Modal';
 import React, {useRef, useState} from 'react';
 import {View} from 'react-native';
+import {useReanimatedKeyboardAnimation} from 'react-native-keyboard-controller';
+import Animated, {useAnimatedStyle} from 'react-native-reanimated';
 
 type PopoverComponentProps = {
     isExpanded: boolean;
@@ -76,6 +81,12 @@ function FilterPopupButton({
         addBottomSafeAreaPadding: isSmallScreenWidth && !isKeyboardActive,
         addOfflineIndicatorBottomSafeAreaPadding: false,
     });
+    const {paddingBottom: safeAreaPaddingBottom} = useSafeAreaPaddings(true);
+    // On Android the modal's keyboard avoidance mixes screen and dialog coordinates and stops short, so a phone sheet pads itself.
+    const shouldPadForKeyboard = isSmallScreenWidth && !isTablet();
+    // The keyboard's offset is negative while it is open. It covers the home indicator, so the sheet pads for whichever is taller.
+    const {height: keyboardOffset} = useReanimatedKeyboardAnimation();
+    const keyboardRoomStyle = useAnimatedStyle(() => ({paddingBottom: Math.max(safeAreaPaddingBottom, -keyboardOffset.get())}));
     const StyleUtils = useStyleUtils();
     const {windowHeight} = useWindowDimensions();
     const triggerRef = useRef<ComponentRef<typeof View> | null>(null);
@@ -142,7 +153,7 @@ function FilterPopupButton({
             {isFocused && hasEverExpanded && (
                 <PopoverWithMeasuredContent
                     anchorRef={triggerRef}
-                    avoidKeyboard
+                    avoidKeyboard={!shouldPadForKeyboard}
                     isVisible={isOverlayVisible}
                     onClose={toggleOverlay}
                     onModalShow={onModalShow}
@@ -165,7 +176,7 @@ function FilterPopupButton({
                     shouldWrapModalChildrenInScrollViewIfBottomDockedInLandscapeMode={false}
                     enableEdgeToEdgeBottomSafeAreaPadding
                 >
-                    <View style={[containerStyles, bottomSafeAreaPaddingStyle]}>{popoverContent}</View>
+                    <Animated.View style={[containerStyles, shouldPadForKeyboard ? keyboardRoomStyle : bottomSafeAreaPaddingStyle]}>{popoverContent}</Animated.View>
                 </PopoverWithMeasuredContent>
             )}
         </View>
