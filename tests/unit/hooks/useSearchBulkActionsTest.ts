@@ -188,7 +188,7 @@ let mockSelectedTransactions: SelectedTransactions = {};
 let mockExcludedTransactions: SelectedTransactions = {};
 let mockSelectedReports: SelectedReports[] = [];
 let mockAreAllMatchingItemsSelected = false;
-let mockCurrentSearchResults: {search: {type: string}; data?: Record<string, unknown>} | undefined;
+let mockCurrentSearchResults: {search?: {type: string}; data?: Record<string, unknown>} | undefined;
 
 jest.mock('@components/Search/SearchContext', () => ({
     useSearchSelectionContext: () => ({
@@ -632,6 +632,20 @@ describe('useSearchBulkActions - CSV export flow', () => {
             expect(result.current.headerButtonsOptions.length).toBeGreaterThan(0);
         });
         expect(result.current.headerButtonsOptions.some((option) => option.value === CONST.SEARCH.BULK_ACTION_TYPES.MERGE_REPORTS)).toBe(false);
+    });
+
+    it('does not crash when the snapshot has data but no search metadata', async () => {
+        // Given an evicted snapshot was recreated by a data-only merge, so it has `data` but lost `search`
+        mockSelectedTransactions = {tx1: makeSelectedTransaction({reportID: 'report1'})};
+        mockCurrentSearchResults = {data: {[`${ONYXKEYS.COLLECTION.TRANSACTION}tx1`]: createRandomTransaction(1)}};
+
+        // When the bulk actions are created while items are selected
+        const {result} = renderHook(() => useSearchBulkActions({queryJSON: expenseReportQueryJSON}), {wrapper: OnyxListItemProvider});
+
+        // Then the hook renders its options instead of throwing on `search.type`
+        await waitFor(() => {
+            expect(result.current.headerButtonsOptions.length).toBeGreaterThan(0);
+        });
     });
 
     it('handleBasicExport with manual selection does not track any export', async () => {
