@@ -1,3 +1,4 @@
+import ActivityIndicator from '@components/ActivityIndicator';
 import FullPageNotFoundView from '@components/BlockingViews/FullPageNotFoundView';
 import HeaderWithBackButton from '@components/HeaderWithBackButton';
 import Icon from '@components/Icon';
@@ -17,11 +18,11 @@ import {useAllPersonalDetails} from '@hooks/usePersonalDetails';
 import useReportAttributes from '@hooks/useReportAttributes';
 import useReportIsArchived from '@hooks/useReportIsArchived';
 import useReportTransactions from '@hooks/useReportTransactions';
+import useSplitContainerTransaction from '@hooks/useSplitContainerTransaction';
 import useTheme from '@hooks/useTheme';
 import useThemeStyles from '@hooks/useThemeStyles';
 
 import {completeSplitBill, setDraftSplitTransaction} from '@libs/actions/IOU/Split';
-import getNonEmptyStringOnyxID from '@libs/getNonEmptyStringOnyxID';
 import cleanupAfterExpenseCreate from '@libs/Navigation/helpers/cleanupAfterExpenseCreate';
 import dismissModalAndOpenReportInInboxTab from '@libs/Navigation/helpers/dismissModalAndOpenReportInInboxTab';
 import Navigation from '@libs/Navigation/Navigation';
@@ -65,7 +66,7 @@ function DynamicSplitBillDetailsPage({report, reportAction}: SplitBillDetailsPag
     const IOUTransactionID = originalMessage?.IOUTransactionID;
     const participantAccountIDs = originalMessage?.participantAccountIDs ?? [];
 
-    const [transaction] = useOnyx(`${ONYXKEYS.COLLECTION.TRANSACTION}${getNonEmptyStringOnyxID(IOUTransactionID)}`);
+    const {transaction, isLoadingTransaction} = useSplitContainerTransaction(reportID, reportAction);
     const [draftTransaction] = useOnyx(`${ONYXKEYS.COLLECTION.SPLIT_TRANSACTION_DRAFT}${IOUTransactionID}`);
     const [personalDetails] = useAllPersonalDetails();
     const [transactionReport] = useOnyx(`${ONYXKEYS.COLLECTION.REPORT}${transaction?.reportID}`);
@@ -162,60 +163,66 @@ function DynamicSplitBillDetailsPage({report, reportAction}: SplitBillDetailsPag
 
     return (
         <ScreenWrapper testID="DynamicSplitBillDetailsPage">
-            <FullPageNotFoundView shouldShow={!reportID || isEmptyObject(reportAction) || isEmptyObject(transaction)}>
+            <FullPageNotFoundView shouldShow={!reportID || isEmptyObject(reportAction) || (isEmptyObject(transaction) && !isLoadingTransaction)}>
                 <HeaderWithBackButton
                     title={translate('common.details')}
                     onBackButtonPress={() => Navigation.goBack(backPath)}
                 />
-                <View style={[styles.containerWithSpaceBetween, styles.pointerEventsBoxNone]}>
-                    {isScanning(transaction) && (
-                        <View style={[styles.ph5, styles.pb3, styles.borderBottom]}>
-                            <MoneyRequestHeaderStatusBar
-                                icon={
-                                    <Icon
-                                        src={icons.ReceiptScan}
-                                        height={variables.iconSizeSmall}
-                                        width={variables.iconSizeSmall}
-                                        fill={theme.icon}
-                                    />
-                                }
-                                description={translate('iou.receiptScanInProgressDescription')}
-                                shouldStyleFlexGrow={false}
-                            />
-                        </View>
-                    )}
-                    <ImageBehaviorContextProvider shouldSetAspectRatioInStyle={!isMapDistanceRequest}>
-                        {!!participants.length && (
-                            <MoneyRequestConfirmationList
-                                payeePersonalDetails={payeePersonalDetails}
-                                selectedParticipants={participantsExcludingPayee}
-                                // Split bill details never render an editable participant row (the transaction is not from global create), so there is nothing to open.
-                                onOpenParticipantPicker={() => {}}
-                                iouType={CONST.IOU.TYPE.SPLIT}
-                                isReadOnly={!isEditingSplitBill}
-                                shouldShowSmartScanFields
-                                receiptOptions={{
-                                    shouldDisplayReceipt: true,
-                                    receiptPath: transaction?.receipt?.source,
-                                    receiptFilename: transaction?.receipt?.filename,
-                                }}
-                                isEditingSplitBill={isEditingSplitBill}
-                                hasSmartScanFailed={hasSmartScanFailed}
-                                reportID={reportID}
-                                reportActionID={reportAction?.reportActionID}
-                                transaction={isEditingSplitBill && draftTransaction ? draftTransaction : transaction}
-                                onConfirm={onConfirm}
-                                isPolicyExpenseChat={isPolicyExpenseChat(report)}
-                                policyID={isPolicyExpenseChat(report) ? report?.policyID : undefined}
-                                action={isEditingSplitBill ? CONST.IOU.ACTION.EDIT : CONST.IOU.ACTION.CREATE}
-                                onToggleBillable={(billable) => {
-                                    setDraftSplitTransaction(transaction?.transactionID, draftTransaction ?? transaction, {billable}, getCurrencyDecimals, getCurrencySymbol);
-                                }}
-                                isConfirmed={isConfirmed}
-                            />
+                {isLoadingTransaction ? (
+                    <View style={[styles.flex1, styles.fullScreenLoading]}>
+                        <ActivityIndicator size={CONST.ACTIVITY_INDICATOR_SIZE.LARGE} />
+                    </View>
+                ) : (
+                    <View style={[styles.containerWithSpaceBetween, styles.pointerEventsBoxNone]}>
+                        {isScanning(transaction) && (
+                            <View style={[styles.ph5, styles.pb3, styles.borderBottom]}>
+                                <MoneyRequestHeaderStatusBar
+                                    icon={
+                                        <Icon
+                                            src={icons.ReceiptScan}
+                                            height={variables.iconSizeSmall}
+                                            width={variables.iconSizeSmall}
+                                            fill={theme.icon}
+                                        />
+                                    }
+                                    description={translate('iou.receiptScanInProgressDescription')}
+                                    shouldStyleFlexGrow={false}
+                                />
+                            </View>
                         )}
-                    </ImageBehaviorContextProvider>
-                </View>
+                        <ImageBehaviorContextProvider shouldSetAspectRatioInStyle={!isMapDistanceRequest}>
+                            {!!participants.length && (
+                                <MoneyRequestConfirmationList
+                                    payeePersonalDetails={payeePersonalDetails}
+                                    selectedParticipants={participantsExcludingPayee}
+                                    // Split bill details never render an editable participant row (the transaction is not from global create), so there is nothing to open.
+                                    onOpenParticipantPicker={() => {}}
+                                    iouType={CONST.IOU.TYPE.SPLIT}
+                                    isReadOnly={!isEditingSplitBill}
+                                    shouldShowSmartScanFields
+                                    receiptOptions={{
+                                        shouldDisplayReceipt: true,
+                                        receiptPath: transaction?.receipt?.source,
+                                        receiptFilename: transaction?.receipt?.filename,
+                                    }}
+                                    isEditingSplitBill={isEditingSplitBill}
+                                    hasSmartScanFailed={hasSmartScanFailed}
+                                    reportID={reportID}
+                                    reportActionID={reportAction?.reportActionID}
+                                    transaction={isEditingSplitBill && draftTransaction ? draftTransaction : transaction}
+                                    onConfirm={onConfirm}
+                                    isPolicyExpenseChat={isPolicyExpenseChat(report)}
+                                    policyID={isPolicyExpenseChat(report) ? report?.policyID : undefined}
+                                    action={isEditingSplitBill ? CONST.IOU.ACTION.EDIT : CONST.IOU.ACTION.CREATE}
+                                    onToggleBillable={(billable) => {
+                                        setDraftSplitTransaction(transaction?.transactionID, draftTransaction ?? transaction, {billable}, getCurrencyDecimals, getCurrencySymbol);
+                                    }}
+                                    isConfirmed={isConfirmed}
+                                />
+                            )}
+                        </ImageBehaviorContextProvider>
+                    </View>
+                )}
             </FullPageNotFoundView>
         </ScreenWrapper>
     );
