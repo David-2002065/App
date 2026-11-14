@@ -177,21 +177,27 @@ function mockGetOlderActions(messageCount: number) {
     });
 }
 
-function mockGetNewerActions(messageCount: number) {
-    fetchMock.mockAPICommand('GetNewerActions', ({reportID, reportActionID}) => ({
-        onyxData:
-            reportID === REPORT_ID
-                ? [
-                      {
-                          onyxMethod: 'merge',
-                          key: `${ONYXKEYS.COLLECTION.REPORT_ACTIONS}${REPORT_ID}`,
-                          // The API also returns the action that was requested with the reportActionID.
-                          value: buildReportComments(messageCount + 1, reportActionID, true),
-                      },
-                  ]
-                : [],
-        hasNewerActions: messageCount > 0,
-    }));
+/** Each call returns the next page size, and an empty page once they run out, which means the newest action was reached. */
+function mockGetNewerActions(...pageSizes: number[]) {
+    let callCount = 0;
+    fetchMock.mockAPICommand('GetNewerActions', ({reportID, reportActionID}) => {
+        const messageCount = pageSizes.at(callCount) ?? 0;
+        callCount++;
+        return {
+            onyxData:
+                reportID === REPORT_ID
+                    ? [
+                          {
+                              onyxMethod: 'merge',
+                              key: `${ONYXKEYS.COLLECTION.REPORT_ACTIONS}${REPORT_ID}`,
+                              // The API also returns the action that was requested with the reportActionID.
+                              value: buildReportComments(messageCount + 1, reportActionID, true),
+                          },
+                      ]
+                    : [],
+            hasNewerActions: messageCount > 0,
+        };
+    });
 }
 
 async function fastSignInWithTestUser() {
@@ -380,19 +386,16 @@ describe('Pagination', () => {
         // Here we have 5 messages from the initial OpenReport and 5 from the initial GetNewerActions.
         expect(getReportActions()).toHaveLength(10);
 
-        // Simulate the backend returning no new messages to simulate reaching the start of the chat.
-        mockGetNewerActions(0);
-
         // There is 1 extra call here because of the comment linking report.
-
-        // Simulate the backend returning no new messages to simulate reaching the start of the chat.
-        mockGetNewerActions(0);
         TestHelper.expectAPICommandToHaveBeenCalled('OpenReport', 3);
         TestHelper.expectAPICommandToHaveBeenCalledWith('OpenReport', 1, {reportID: REPORT_ID, reportActionID: '5'});
         TestHelper.expectAPICommandToHaveBeenCalled('GetOlderActions', 0);
         TestHelper.expectAPICommandToHaveBeenCalledWith('GetNewerActions', 0, {reportID: REPORT_ID, reportActionID: '5'});
 
-        // Simulate the maintainVisibleContentPosition scroll adjustment, so it is now possible to scroll down more.
+        // The list stayed at the bottom, so the next page is requested without scrolling and reaches the start of the chat.
+        TestHelper.expectAPICommandToHaveBeenCalledWith('GetNewerActions', 1, {reportID: REPORT_ID, reportActionID: '10'});
+
+        // Scroll away and back to the bottom.
         scrollToOffset(500);
         await waitForBatchedUpdatesWithAct();
         scrollToOffset(0);
@@ -417,5 +420,37 @@ describe('Pagination', () => {
 
         // We still have 10 messages. 5 from the initial OpenReport and 5 from the GetNewerActions call.
         expect(getReportActions()).toHaveLength(10);
+    });
+
+    it('keeps loading newer messages while the user stays at the bottom of the chat', async () => {
+        // Given a linked chat whose first page doesn't reach the newest message, and two more pages of newer messages on the backend
+        mockOpenReport(5, '5');
+        mockGetNewerActions(5, 5);
+
+        await signInAndGetApp();
+        await navigateToSidebarOption(COMMENT_LINKING_REPORT_ID);
+
+        const link = screen.getByText('Link 1');
+        fireEvent(link, 'press');
+        await waitFor(() => {
+            jest.requireMock<NativeNavigationMock>('@react-navigation/native').triggerTransitionEnd();
+        });
+
+        // When the user reaches the bottom of the loaded messages and stays there while the newer page loads
+        scrollToOffset(0);
+        triggerListLayout();
+        await waitForNetworkPromises();
+        await waitForBatchedUpdatesWithAct();
+        await waitForNetworkPromises();
+        await waitForBatchedUpdatesWithAct();
+
+        // Then the next newer page is still requested from the new cursor, since the list never left the bottom to fire onStartReached again
+        TestHelper.expectAPICommandToHaveBeenCalledWith('GetNewerActions', 0, {reportID: REPORT_ID, reportActionID: '5'});
+        TestHelper.expectAPICommandToHaveBeenCalledWith('GetNewerActions', 1, {reportID: REPORT_ID, reportActionID: '10'});
+        TestHelper.expectAPICommandToHaveBeenCalledWith('GetNewerActions', 2, {reportID: REPORT_ID, reportActionID: '15'});
+        TestHelper.expectAPICommandToHaveBeenCalled('GetNewerActions', 3);
+        await waitFor(() => {
+            expect(getReportActions()).toHaveLength(15);
+        });
     });
 });

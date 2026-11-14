@@ -16,7 +16,7 @@ import type {ViewToken} from '@src/types/utils/ReactNativeCompat';
 
 import type {LayoutChangeEvent, NativeScrollEvent, NativeSyntheticEvent} from 'react-native';
 
-import {useEffect, useRef} from 'react';
+import {useEffect, useEffectEvent, useRef} from 'react';
 
 import type {UseReportActionsListScrollParams} from './types';
 
@@ -173,6 +173,23 @@ function useReportActionsListScroll({
             },
         });
     };
+
+    // FlashList won't fire onStartReached again while the list stays at the bottom, so load the next newer page when one lands
+    const newerPageAutoLoadKey = hasNewerActions ? listData.at(0)?.reportActionID : undefined;
+    const lastNewerPageAutoLoadKeyRef = useRef(newerPageAutoLoadKey);
+    const loadNewerChatsAtBottom = useEffectEvent(() => {
+        if (hasScrolledOverThreshold) {
+            return;
+        }
+        loadNewerChatsAfterTransitions();
+    });
+    useEffect(() => {
+        if (!newerPageAutoLoadKey || lastNewerPageAutoLoadKeyRef.current === newerPageAutoLoadKey) {
+            return;
+        }
+        lastNewerPageAutoLoadKeyRef.current = newerPageAutoLoadKey;
+        loadNewerChatsAtBottom();
+    }, [newerPageAutoLoadKey]);
 
     useFollowActionBadgeTarget({
         reportID,
