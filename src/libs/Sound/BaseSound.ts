@@ -1,4 +1,5 @@
 import getPlatform from '@libs/getPlatform';
+import Log from '@libs/Log';
 
 import ONYXKEYS from '@src/ONYXKEYS';
 
@@ -45,7 +46,11 @@ function withMinimalExecutionTime<F extends (...args: Parameters<F>) => ReturnTy
             }
 
             const [nextFunc, resolve] = next;
-            nextFunc();
+            Promise.resolve()
+                .then(nextFunc)
+                .catch((error: unknown) => {
+                    Log.hmmm('[sound] Queued sound failed', {message: error instanceof Error ? error.message : String(error)});
+                });
             resolve();
             timerId = setTimeout(processQueue, minExecutionTime);
         } else {
