@@ -1,3 +1,4 @@
+import useOnyx from '@hooks/useOnyx';
 import useReportActionsScroll from '@hooks/useReportActionsScroll';
 import useReportScrollManager from '@hooks/useReportScrollManager';
 import useWindowDimensions from '@hooks/useWindowDimensions';
@@ -11,6 +12,7 @@ import useFollowActionBadgeTarget from '@pages/inbox/report/useFollowActionBadge
 import useScrollToEditingReportAction from '@pages/inbox/report/useScrollToEditingReportAction';
 
 import CONST from '@src/CONST';
+import ONYXKEYS from '@src/ONYXKEYS';
 import type * as OnyxTypes from '@src/types/onyx';
 import type {ViewToken} from '@src/types/utils/ReactNativeCompat';
 
@@ -174,8 +176,9 @@ function useReportActionsListScroll({
         });
     };
 
-    // FlashList won't fire onStartReached again while the list stays at the bottom, so load the next newer page when one lands
-    const newerPageAutoLoadKey = hasNewerActions ? listData.at(0)?.reportActionID : undefined;
+    // FlashList won't fire onStartReached again while the list stays at the bottom, so load the next page whenever the newer cursor moves
+    const [newestFetchedReportActionID] = useOnyx(`${ONYXKEYS.COLLECTION.REPORT_PAGINATION_STATE}${reportID}`, {selector: (state) => state?.newestFetchedReportActionID});
+    const newerPageAutoLoadKey = hasNewerActions ? (newestFetchedReportActionID ?? listData.at(0)?.reportActionID) : undefined;
     const lastNewerPageAutoLoadKeyRef = useRef(newerPageAutoLoadKey);
     const loadNewerChatsAtBottom = useEffectEvent(() => {
         if (hasScrolledOverThreshold) {
