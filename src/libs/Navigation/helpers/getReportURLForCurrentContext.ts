@@ -16,13 +16,13 @@ const SEARCH_REPORT_ROUTE_PREFIX = ROUTES.SEARCH_REPORT.route.slice(0, ROUTES.SE
  * When in a search context, includes backTo parameter to preserve search state.
  * Otherwise, returns a simple report URL.
  */
-function getReportURLForCurrentContext(reportID: string | undefined): string {
+function getReportURLForCurrentContext(reportID: string | undefined, currentEnvironmentURL = environmentURL): string {
     if (!reportID) {
-        return `${environmentURL}/r/`;
+        return `${currentEnvironmentURL}/r/`;
     }
     const isInSearchContext = isSearchTopmostFullScreenRoute();
     if (!isInSearchContext) {
-        return `${environmentURL}/${ROUTES.REPORT_WITH_ID.getRoute(reportID)}`;
+        return `${currentEnvironmentURL}/${ROUTES.REPORT_WITH_ID.getRoute(reportID)}`;
     }
 
     // Navigation can return routes with a leading slash or missing when still mounting.
@@ -71,7 +71,7 @@ function getReportURLForCurrentContext(reportID: string | undefined): string {
     }
 
     const relativePath = ROUTES.SEARCH_MONEY_REQUEST_REPORT.getRoute({reportID, backTo: backToRoute});
-    return `${environmentURL}/${relativePath}`;
+    return `${currentEnvironmentURL}/${relativePath}`;
 }
 
 export default getReportURLForCurrentContext;

@@ -1,5 +1,6 @@
 import RenderHTML from '@components/RenderHTML';
 
+import useEnvironment from '@hooks/useEnvironment';
 import useLocalize from '@hooks/useLocalize';
 import useOnyx from '@hooks/useOnyx';
 
@@ -21,9 +22,11 @@ type CreatedReportForUnapprovedTransactionsActionProps = {
 function CreatedReportForUnapprovedTransactionsAction({action}: CreatedReportForUnapprovedTransactionsActionProps) {
     const {originalID} = getOriginalMessage(action) ?? {};
     const {translate} = useLocalize();
+    // The module-level URL in getReportURLForCurrentContext is still unset on the first render after a cold start on native.
+    const {environmentURL} = useEnvironment();
     const [originalReport] = useOnyx(`${ONYXKEYS.COLLECTION.REPORT}${originalID}`);
     const reportName = getReportName(originalReport);
-    const htmlContent = `<comment><muted-text>${getCreatedReportForUnapprovedTransactionsMessage(originalID, reportName, isOriginalReportDeleted(action, originalReport), translate)}</muted-text></comment>`;
+    const htmlContent = `<comment><muted-text>${getCreatedReportForUnapprovedTransactionsMessage(originalID, reportName, isOriginalReportDeleted(action, originalReport), translate, environmentURL)}</muted-text></comment>`;
 
     return (
         <ReportActionItemBasicMessage>

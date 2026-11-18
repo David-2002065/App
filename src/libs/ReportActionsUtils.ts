@@ -5936,11 +5936,17 @@ function isOriginalReportDeleted(action: OnyxEntry<ReportAction>, originalReport
     return !!action?.isOriginalReportDeleted || originalReport?.pendingFields?.preview === CONST.RED_BRICK_ROAD_PENDING_ACTION.DELETE;
 }
 
-function getCreatedReportForUnapprovedTransactionsMessage(reportID: string | undefined, reportName: string, isReportDeleted: boolean, translate: LocalizedTranslate): string {
+function getCreatedReportForUnapprovedTransactionsMessage(
+    reportID: string | undefined,
+    reportName: string,
+    isReportDeleted: boolean,
+    translate: LocalizedTranslate,
+    currentEnvironmentURL?: string,
+): string {
     if (reportID === undefined) {
         return '';
     }
-    const reportUrl = getReportURLForCurrentContext(reportID);
+    const reportUrl = getReportURLForCurrentContext(reportID, currentEnvironmentURL);
     return translate('reportAction.createdReportForUnapprovedTransactions', reportUrl, reportName, reportID, isReportDeleted);
 }
 
