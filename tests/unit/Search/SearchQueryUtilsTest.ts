@@ -4907,6 +4907,36 @@ describe('SearchQueryUtils', () => {
             });
         });
 
+        test('groupBy change keeps a sort order the user picked', () => {
+            // Given an ungrouped search the user switched to Ascending (default is Descending)
+            // When they group by Day
+            const result = buildFilterQueryWithSortDefaults(
+                {type: 'expense', groupBy: CONST.SEARCH.GROUP_BY.DAY},
+                {},
+                {sortBy: CONST.SEARCH.TABLE_COLUMNS.DATE, sortOrder: CONST.SEARCH.SORT_ORDER.ASC},
+            );
+            const queryJSON = buildSearchQueryJSON(result ?? '');
+
+            // Then the column moves to the Day default but Ascending is kept
+            expect(queryJSON?.sortBy).toBe(CONST.SEARCH.TABLE_COLUMNS.GROUP_DAY);
+            expect(queryJSON?.sortOrder).toBe(CONST.SEARCH.SORT_ORDER.ASC);
+        });
+
+        test('groupBy change still applies the new default when the sort order was never changed', () => {
+            // Given an ungrouped search on its default Descending order
+            // When they group by Category, whose default is Ascending
+            const result = buildFilterQueryWithSortDefaults(
+                {type: 'expense', groupBy: CONST.SEARCH.GROUP_BY.CATEGORY},
+                {},
+                {sortBy: CONST.SEARCH.TABLE_COLUMNS.DATE, sortOrder: CONST.SEARCH.SORT_ORDER.DESC},
+            );
+            const queryJSON = buildSearchQueryJSON(result ?? '');
+
+            // Then the Category defaults apply because there was no user choice to keep
+            expect(queryJSON?.sortBy).toBe(CONST.SEARCH.TABLE_COLUMNS.GROUP_CATEGORY);
+            expect(queryJSON?.sortOrder).toBe(CONST.SEARCH.SORT_ORDER.ASC);
+        });
+
         test('groupBy change replaces stale sortBy with new default', () => {
             const result = buildFilterQueryWithSortDefaults(
                 {type: 'expense', groupBy: CONST.SEARCH.GROUP_BY.MONTH, view: CONST.SEARCH.VIEW.BAR},

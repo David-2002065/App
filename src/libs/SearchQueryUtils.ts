@@ -3364,9 +3364,15 @@ function buildFilterQueryWithSortDefaults(
             groupBy: filterValues.groupBy,
         });
 
+    // A sort order that differs from the old grouping's default was picked by the user, so keep it
+    const previousDefaultSortOrder = resetSort
+        ? buildSearchQueryJSON(buildQueryStringFromFilterFormValues({type: filterValues.type, groupBy: previousState.groupBy, view: previousState.view}))?.sortOrder
+        : undefined;
+    const shouldKeepSortOrder = resetSort && !!currentQueryOptions.sortOrder && currentQueryOptions.sortOrder !== previousDefaultSortOrder;
+
     const queryString = buildQueryStringFromFilterFormValues(filterValues, {
         sortBy: resetSort || resetSortForViewChange ? undefined : currentQueryOptions.sortBy,
-        sortOrder: resetSort || resetSortForViewChange ? undefined : currentQueryOptions.sortOrder,
+        sortOrder: (resetSort && !shouldKeepSortOrder) || resetSortForViewChange ? undefined : currentQueryOptions.sortOrder,
         flatFilters: currentQueryOptions.flatFilters,
     });
 
