@@ -3393,6 +3393,108 @@ describe('SearchUIUtils', () => {
             ).toStrictEqual(transactionReportGroupListItems);
         });
 
+        it('should show an IOU report on the Reports tab for the payer who does not own it', async () => {
+            // Given the current user is the payer of report3, an IOU owned by someone else
+            await Onyx.merge(ONYXKEYS.SESSION, {accountID: approverAccountID});
+            await waitForBatchedUpdates();
+            const iouOnlyData: OnyxTypes.SearchResults['data'] = {
+                personalDetailsList: searchResults.data.personalDetailsList,
+                [`policy_${policyID}`]: searchResults.data[`policy_${policyID}`],
+                [`report_${reportID3}`]: searchResults.data[`report_${reportID3}`],
+                [`transactions_${transactionID3}`]: searchResults.data[`transactions_${transactionID3}`],
+            };
+
+            // When the Reports tab (type:expense-report) sections are built from that snapshot
+            const [sections] = SearchUIUtils.getSections({
+                dateFnsLocale: undefined,
+                type: CONST.SEARCH.DATA_TYPES.EXPENSE_REPORT,
+                data: iouOnlyData,
+                currentAccountID: approverAccountID,
+                currentUserEmail: approverEmail,
+                translate: translateLocal,
+                formatPhoneNumber,
+                bankAccountList: {},
+                rules: undefined,
+                conciergeReportID: undefined,
+                convertToDisplayString,
+                reportAttributesDerivedValue: {},
+            });
+            const iouRow = sections.filter(SearchUIUtils.isTransactionReportGroupListItemType).find((item) => item.reportID === reportID3);
+
+            // Then the IOU is listed with the owner in From and the payer in To, so the App shows it as soon as Search returns it
+            expect(iouRow?.type).toBe(CONST.REPORT.TYPE.IOU);
+            expect(iouRow?.from?.accountID).toBe(adminAccountID);
+            expect(iouRow?.to?.accountID).toBe(approverAccountID);
+        });
+
+        it('should show an invoice received in an individual invoice room on the type:invoice search', async () => {
+            // Given an invoice sent from another user's workspace to the current user as an individual
+            await Onyx.merge(ONYXKEYS.SESSION, {accountID: approverAccountID});
+            await waitForBatchedUpdates();
+            const invoiceReportID = 'received-invoice-report';
+            const invoiceRoomID = 'received-invoice-room';
+            const invoiceTransactionID = 'received-invoice-transaction';
+            const receivedInvoiceData: OnyxTypes.SearchResults['data'] = {
+                personalDetailsList: searchResults.data.personalDetailsList,
+                [`report_${invoiceReportID}`]: {
+                    ...searchResults.data[`report_${reportID3}`],
+                    reportID: invoiceReportID,
+                    chatReportID: invoiceRoomID,
+                    policyID: 'invoice-sender-policy',
+                    type: CONST.REPORT.TYPE.INVOICE,
+                    ownerAccountID: adminAccountID,
+                    managerID: approverAccountID,
+                    stateNum: CONST.REPORT.STATE_NUM.SUBMITTED,
+                    statusNum: CONST.REPORT.STATUS_NUM.SUBMITTED,
+                },
+                [`report_${invoiceRoomID}`]: {
+                    ...searchResults.data[`report_${reportID4}`],
+                    reportID: invoiceRoomID,
+                    chatType: CONST.REPORT.CHAT_TYPE.INVOICE,
+                    invoiceReceiver: {type: CONST.REPORT.INVOICE_RECEIVER_TYPE.INDIVIDUAL, accountID: approverAccountID},
+                },
+                [`transactions_${invoiceTransactionID}`]: {
+                    ...searchResults.data[`transactions_${transactionID3}`],
+                    transactionID: invoiceTransactionID,
+                    reportID: invoiceReportID,
+                },
+            };
+
+            // When the type:invoice sections are built from that snapshot
+            const [sections] = SearchUIUtils.getSections({
+                dateFnsLocale: undefined,
+                type: CONST.SEARCH.DATA_TYPES.INVOICE,
+                data: receivedInvoiceData,
+                currentAccountID: approverAccountID,
+                currentUserEmail: approverEmail,
+                translate: translateLocal,
+                formatPhoneNumber,
+                bankAccountList: {},
+                rules: undefined,
+                conciergeReportID: undefined,
+                convertToDisplayString,
+                reportAttributesDerivedValue: {},
+            });
+
+            // Then the received invoice is listed, so the App shows it as soon as Search returns it
+            const invoiceRow = sections.filter(SearchUIUtils.isTransactionListItemType).find((item) => item.transactionID === invoiceTransactionID);
+            expect(invoiceRow?.reportID).toBe(invoiceReportID);
+        });
+
+        it('should send the Reports and type:invoice searches without any owner, payer or workspace filter', () => {
+            // Given the canned Reports search and a typed type:invoice search
+            const reportsQueryJSON = SearchUIUtils.getSuggestedSearches(approverAccountID)[CONST.SEARCH.SEARCH_KEYS.REPORTS].searchQueryJSON;
+            const invoiceQueryJSON = buildSearchQueryJSON('type:invoice');
+
+            // When we read the filters those queries carry
+            const filterKeys = [...(reportsQueryJSON?.flatFilters ?? []), ...(invoiceQueryJSON?.flatFilters ?? [])].map((filter) => filter.key);
+
+            // Then nothing scopes them to reports the user owns, so received IOUs and invoices depend only on what Search returns
+            expect(reportsQueryJSON?.type).toBe(CONST.SEARCH.DATA_TYPES.EXPENSE_REPORT);
+            expect(invoiceQueryJSON?.type).toBe(CONST.SEARCH.DATA_TYPES.INVOICE);
+            expect(filterKeys).toStrictEqual([]);
+        });
+
         it('should prefer preview delete over stale total when deriving expense report pending action', () => {
             const localSearchResults: OnyxTypes.SearchResults['data'] = {
                 ...searchResults.data,
