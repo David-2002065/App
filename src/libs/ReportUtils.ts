@@ -137,6 +137,7 @@ import linkingPrefixes from './Navigation/linkingConfig/prefixes';
 import Navigation, {navigationRef} from './Navigation/Navigation';
 import {getDBTimeWithSkew, getServerAnchoredDBTime} from './NetworkState';
 import {rand64} from './NumberUtils';
+import {markOnboardingCompletionStartedLocally} from './OnboardingLocalCompletion';
 import {isTrackOnboardingChoice} from './OnboardingUtils';
 import Parser from './Parser';
 import {getParsedMessageWithShortMentions} from './ParsingUtils';
@@ -14481,6 +14482,7 @@ function prepareOnboardingOnyxData({
     }
 
     if (!wasInvited && !isIncremental) {
+        markOnboardingCompletionStartedLocally();
         optimisticData.push({
             onyxMethod: Onyx.METHOD.MERGE,
             key: ONYXKEYS.NVP_ONBOARDING,

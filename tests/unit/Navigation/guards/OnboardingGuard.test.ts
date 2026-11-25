@@ -489,22 +489,80 @@ describe('OnboardingGuard', () => {
             expect(result.type).toBe('REDIRECT');
         });
 
-        it('should NOT redirect completed user for REPLACE actions targeting onboarding', async () => {
-            // Given a user who has completed the guided setup flow
+        it('should redirect completed user for REPLACE actions targeting onboarding', async () => {
+            // Given a user whose completion arrived while an onboarding screen is still mounted (e.g. from another device)
             await Onyx.merge(ONYXKEYS.NVP_ONBOARDING, {
                 hasCompletedGuidedSetupFlow: true,
             });
             await waitForBatchedUpdates();
 
-            // When a REPLACE action targets the OnboardingModalNavigator
+            // When that screen auto-advances to the next step with forceReplace
             const replaceAction: NavigationAction = {
                 type: CONST.NAVIGATION.ACTION_TYPE.REPLACE,
-                payload: {name: NAVIGATORS.ONBOARDING_MODAL_NAVIGATOR},
+                payload: {name: NAVIGATORS.ONBOARDING_MODAL_NAVIGATOR, params: {screen: SCREENS.ONBOARDING.PURPOSE}},
             };
 
             const result = OnboardingGuard.evaluate(mockState, replaceAction, authenticatedContext);
 
-            // Then navigation should be allowed because isNavigatingToOnboardingFlow only handles NAVIGATE and PUSH action types, not REPLACE
+            // Then the user is sent Home, because a completed user has no next onboarding step to walk through
+            expect(result).toEqual({type: 'REDIRECT', route: ROUTES.HOME});
+        });
+
+        it('should ALLOW a completed user REPLACE that targets a join-workspace task screen', async () => {
+            // Given a completed user running the Concierge join-workspace task
+            await Onyx.merge(ONYXKEYS.NVP_ONBOARDING, {
+                hasCompletedGuidedSetupFlow: true,
+            });
+            await waitForBatchedUpdates();
+
+            // When the task advances to its next screen with the task param
+            const replaceAction: NavigationAction = {
+                type: CONST.NAVIGATION.ACTION_TYPE.REPLACE,
+                payload: {name: NAVIGATORS.ONBOARDING_MODAL_NAVIGATOR, params: {screen: SCREENS.ONBOARDING.WORKSPACES, params: {isJoinWorkspaceTask: 'true'}}},
+            };
+
+            const result = OnboardingGuard.evaluate(mockState, replaceAction, authenticatedContext);
+
+            // Then the task keeps working, since it runs after onboarding is completed
+            expect(result.type).toBe('ALLOW');
+        });
+
+        it('should ALLOW a completed user REPLACE without the task param while a join-workspace task screen is focused', async () => {
+            // Given a completed user on the task's workspaces screen
+            await Onyx.merge(ONYXKEYS.NVP_ONBOARDING, {
+                hasCompletedGuidedSetupFlow: true,
+            });
+            await waitForBatchedUpdates();
+            const taskState: NavigationState = {
+                ...mockState,
+                index: 1,
+                routeNames: [SCREENS.HOME, NAVIGATORS.ONBOARDING_MODAL_NAVIGATOR],
+                routes: [
+                    {key: 'home', name: SCREENS.HOME},
+                    {
+                        key: 'onboarding-modal',
+                        name: NAVIGATORS.ONBOARDING_MODAL_NAVIGATOR,
+                        state: {
+                            key: 'onboarding-stack',
+                            index: 0,
+                            routeNames: [SCREENS.ONBOARDING.WORKSPACES],
+                            routes: [{key: 'workspaces', name: SCREENS.ONBOARDING.WORKSPACES, params: {isJoinWorkspaceTask: 'true'}}],
+                            stale: false,
+                            type: 'stack',
+                        },
+                    },
+                ],
+            };
+
+            // When the task moves on to personal details, which doesn't carry the task param
+            const replaceAction: NavigationAction = {
+                type: CONST.NAVIGATION.ACTION_TYPE.REPLACE,
+                payload: {name: NAVIGATORS.ONBOARDING_MODAL_NAVIGATOR, params: {screen: SCREENS.ONBOARDING.PERSONAL_DETAILS}},
+            };
+
+            const result = OnboardingGuard.evaluate(taskState, replaceAction, authenticatedContext);
+
+            // Then the step is allowed, because the focused screen shows this is still the task session
             expect(result.type).toBe('ALLOW');
         });
     });

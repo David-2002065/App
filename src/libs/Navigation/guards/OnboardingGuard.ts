@@ -220,6 +220,14 @@ function isNavigatingToJoinWorkspaceTask(action: NavigationAction): boolean {
     return JOIN_WORKSPACE_TASK_SCREENS.has(getActionPayloadScreenName(action) ?? '') && getActionPayloadScreenParams(action)?.isJoinWorkspaceTask === 'true';
 }
 
+/**
+ * Check if a REPLACE belongs to the Concierge join-workspace task, which runs after onboarding is completed.
+ * Some task steps (e.g. workspaces -> personal details) don't carry the param, so the focused route is checked too.
+ */
+function isInJoinWorkspaceTaskSession(state: NavigationState, action: NavigationAction): boolean {
+    return getActionPayloadScreenParams(action)?.isJoinWorkspaceTask === 'true' || getDeepestFocusedScreen(state)?.params?.isJoinWorkspaceTask === 'true';
+}
+
 const ACTIONS_THAT_CAN_LEAVE_ONBOARDING = new Set<string>([
     CONST.NAVIGATION.ACTION_TYPE.NAVIGATE,
     CONST.NAVIGATION.ACTION_TYPE.PUSH,
@@ -274,6 +282,12 @@ const OnboardingGuard: NavigationGuard = {
         // is not something they should be able to re-enter once it is done.
         if (onboarding && isOnboardingCompleted && isNavigatingToOnboardingFlow(action) && !isNavigatingToJoinWorkspaceTaskRoute) {
             Log.info('[OnboardingGuard] Redirecting user away from onboarding route to home');
+            return {type: 'REDIRECT', route: ROUTES.HOME};
+        }
+
+        // A completed user can still REPLACE between onboarding steps, so only the Concierge join-workspace task may do that
+        if (onboarding && isOnboardingCompleted && isNavigatingToOnboardingFlowWithReplaceAction(action) && !isInJoinWorkspaceTaskSession(state, action)) {
+            Log.info('[OnboardingGuard] Redirecting completed user away from onboarding REPLACE to home');
             return {type: 'REDIRECT', route: ROUTES.HOME};
         }
 

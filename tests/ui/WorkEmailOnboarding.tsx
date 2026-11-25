@@ -801,24 +801,25 @@ describe('OnboardingWorkEmail Page', () => {
         await waitForBatchedUpdatesWithAct();
     });
 
-    it('should skip Onboarding private domain for a validated public-domain user after guided setup is complete', async () => {
+    it('should not move a validated public-domain user to another onboarding step after guided setup is complete', async () => {
+        // Given a validated public-domain user whose guided setup was completed elsewhere (e.g. on another device)
         await TestHelper.signInWithTestUser();
 
         await act(async () => {
             await Onyx.merge(ONYXKEYS.NVP_ONBOARDING, {
                 hasCompletedGuidedSetupFlow: true,
             });
-            // Validated public-domain user (original bug case): PRIVATE_DOMAIN would say "people on gmail.com" — skip to PURPOSE.
             await Onyx.merge(ONYXKEYS.ACCOUNT, {validated: true, isFromPublicDomain: true});
         });
 
+        // When the work email screen is still mounted outside a Concierge task
         const {unmount} = renderOnboardingWorkEmailPage(SCREENS.ONBOARDING.WORK_EMAIL, undefined);
 
         await waitForBatchedUpdatesWithAct();
 
-        await waitFor(() => {
-            expect(navigate).toHaveBeenCalledWith(ROUTES.ONBOARDING_PURPOSE.getRoute(), {forceReplace: true});
-        });
+        // Then it doesn't walk the user into purpose or private domain, there is no next step and useOnboardingFlowRouter closes the flow
+        expect(navigate).not.toHaveBeenCalledWith(ROUTES.ONBOARDING_PURPOSE.getRoute(), expect.anything());
+        expect(navigate).not.toHaveBeenCalledWith(ROUTES.ONBOARDING_PRIVATE_DOMAIN.getRoute(), expect.anything());
 
         unmount();
         await waitForBatchedUpdatesWithAct();

@@ -70,7 +70,6 @@ type Item = {
 
 const accountSelector = (account: OnyxEntry<Account>) => ({
     validated: account?.validated,
-    isFromPublicDomain: account?.isFromPublicDomain,
 });
 
 function BaseOnboardingWorkEmail({shouldUseNativeStyles, route}: BaseOnboardingWorkEmailProps) {
@@ -140,14 +139,14 @@ function BaseOnboardingWorkEmail({shouldUseNativeStyles, route}: BaseOnboardingW
     }, [isConciergeTaskFlow, onboardingValues?.isMergingAccountBlocked]);
 
     useEffect(() => {
-        const navigateToNextStep = (shouldSkipPrivateDomain = false) => {
+        const navigateToNextStep = () => {
             if (isVsb || isSmb) {
                 Navigation.navigate(ROUTES.ONBOARDING_EMPLOYEES.getRoute(), {
                     forceReplace: true,
                 });
                 return;
             }
-            if (!shouldSkipPrivateDomain && !onboardingValues?.isMergeAccountStepSkipped) {
+            if (!onboardingValues?.isMergeAccountStepSkipped) {
                 Navigation.navigate(ROUTES.ONBOARDING_PRIVATE_DOMAIN.getRoute(), {
                     forceReplace: true,
                 });
@@ -200,11 +199,8 @@ function BaseOnboardingWorkEmail({shouldUseNativeStyles, route}: BaseOnboardingW
             return;
         }
 
-        // A validated account has no reason to be on the onboarding "add work email" screen. For a public-domain primary the
-        // PRIVATE_DOMAIN screen would reference gmail.com (etc.) so skip it.
-        // During incomplete guided setup (e.g. required-2FA handoff), stay on work-email even if the account is validated.
+        // A completed user outside the Concierge task has no next onboarding step, useOnboardingFlowRouter closes the flow.
         if (isCurrentPrimaryValidated && hasCompletedGuidedSetupFlow) {
-            navigateToNextStep(account?.isFromPublicDomain);
             return;
         }
 
@@ -224,7 +220,6 @@ function BaseOnboardingWorkEmail({shouldUseNativeStyles, route}: BaseOnboardingW
         // joinable workspaces for its domain.
         navigateToNextStep();
     }, [
-        account?.isFromPublicDomain,
         isCurrentPrimaryValidated,
         isCurrentPrimaryPublicDomain,
         hasCompletedGuidedSetupFlow,

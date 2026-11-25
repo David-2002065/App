@@ -2,8 +2,10 @@ import {useInitialURLState} from '@components/InitialURLContextProvider';
 
 import AccountUtils from '@libs/AccountUtils';
 import getCurrentUrl from '@libs/Navigation/currentUrl';
-import Navigation from '@libs/Navigation/Navigation';
+import dismissOnboardingModalBeforeExit from '@libs/Navigation/helpers/OnboardingNavigationUtils';
+import Navigation, {getDeepestFocusedScreen, navigationRef} from '@libs/Navigation/Navigation';
 import TransitionTracker from '@libs/Navigation/TransitionTracker';
+import {hasOnboardingCompletionStartedLocally} from '@libs/OnboardingLocalCompletion';
 import {isLoggingInAsNewUser} from '@libs/SessionUtils';
 import {hasSecureLinkKey} from '@libs/Url';
 
@@ -11,6 +13,7 @@ import {completeHybridAppOnboarding} from '@userActions/Welcome';
 import {buildOnboardingFlowParams, startOnboardingFlow} from '@userActions/Welcome/OnboardingFlow';
 
 import CONFIG from '@src/CONFIG';
+import NAVIGATORS from '@src/NAVIGATORS';
 import ONYXKEYS from '@src/ONYXKEYS';
 import ROUTES from '@src/ROUTES';
 import isLoadingOnyxValue from '@src/types/utils/isLoadingOnyxValue';
@@ -142,6 +145,19 @@ function useOnboardingFlowRouter() {
                 if (isOnboardingCompleted === false) {
                     Navigation.isNavigationReady().then(() => {
                         startOnboardingFlow(buildOnboardingFlowParams(account, onboardingValues, onboardingCompanySize, onboardingPurposeSelected, onboardingInitialPath));
+                    });
+                    return;
+                }
+
+                // Completion that came from another device or a fresh refresh never runs navigateAfterOnboarding, so close the open flow here
+                if (isOnboardingCompleted && !hasOnboardingCompletionStartedLocally()) {
+                    Navigation.isNavigationReady().then(() => {
+                        const rootState = navigationRef.getRootState();
+                        const isOnboardingOpen = rootState?.routes.some((route) => route.name === NAVIGATORS.ONBOARDING_MODAL_NAVIGATOR);
+                        if (!isOnboardingOpen || getDeepestFocusedScreen(rootState)?.params?.isJoinWorkspaceTask === 'true') {
+                            return;
+                        }
+                        dismissOnboardingModalBeforeExit(() => Navigation.navigate(ROUTES.HOME));
                     });
                 }
             },
